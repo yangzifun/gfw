@@ -125,6 +125,9 @@ export default {
         if (url.pathname === '/api/gfwlist.csv') {
             return this.serveIkuaiCsv(request);
         }
+        if (url.pathname === '/api/gfwlist_new.csv') {
+            return this.serveNewCsv(request);
+        }
         return new Response('Not Found', { status: 404 });
     },
 
@@ -137,7 +140,7 @@ export default {
                 <a href="https://bbs.yangzihome.space/archives/gfw-domain-api" target="_blank" rel="noopener noreferrer" class="nav-btn">API 文档</a>
             </div>
             <div class="card">
-                <h2>1. CSV 批量导入 (推荐)</h2>
+                <h2>1. 旧版本 CSV 批量导入 (需填写参数)</h2>
                 <div class="form-group">
                     <label for="start_id">起始 ID:</label>
                     <input type="number" id="start_id" value="1" min="1">
@@ -153,7 +156,12 @@ export default {
                 <button id="download-csv-button" class="nav-btn primary" style="width:100%; padding: 12px;">生成并下载 CSV</button>
             </div>
             <div class="card">
-                <h2>2. 纯文本域名列表</h2>
+                <h2>2. 新版本 CSV 导出 (无需填写参数)</h2>
+                <p style="margin-bottom: 14px; color: #5a666d;">新版 CSV 自动按分类生成 group_name / group_value，直接点击下载即可。</p>
+                <button id="download-new-csv-button" class="nav-btn primary" style="width:100%; padding: 12px;">生成并下载 新版 CSV</button>
+            </div>
+            <div class="card">
+                <h2>3. 纯文本域名列表</h2>
                 <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
                     <button id="copy-all-button" class="nav-btn">一键复制全部</button>
                 </div>
@@ -346,6 +354,19 @@ export default {
                 setButtonLoading(downloadCsvButton, false, originalText);
               }
             });
+            const downloadNewCsvButton = document.getElementById('download-new-csv-button');
+            downloadNewCsvButton.addEventListener('click', () => {
+              const originalText = downloadNewCsvButton.innerHTML;
+              setButtonLoading(downloadNewCsvButton, true);
+              try {
+                window.location.href = '/api/gfwlist_new.csv';
+                showToast('新版 CSV 文件已开始下载！', 'success');
+              } catch (err) {
+                showToast('下载 新版 CSV 失败: ' + err.message, 'error');
+              } finally {
+                setButtonLoading(downloadNewCsvButton, false, originalText);
+              }
+            });
             copyRawGfwlistButton.addEventListener('click', async () => {
                 if (!originalRawGfwlistText) return;
                 const originalButtonText = copyRawGfwlistButton.innerHTML;
@@ -475,6 +496,34 @@ export default {
         } catch (error) {
             console.error('CSV Generation Error:', error);
             return new Response(`Error generating CSV: ${error.message}`, { status: 500 });
+        }
+    },
+
+    async serveNewCsv(request) {
+        try {
+            let currentId = 1;
+            const categorizedDomains = await this.getCleanGfwDomains(true);
+
+            const csvRows = ['id,group_name,group_value'];
+            for (const { category, domains } of categorizedDomains) {
+                if (!domains || domains.length === 0) continue;
+                const groupValue = domains.map(domain => ({ domain, comment: '' }));
+                const groupValueJson = JSON.stringify(groupValue);
+                const escapedGroupValue = '"' + groupValueJson.replace(/"/g, '""') + '"';
+                const escapedCategory = '"' + category.replace(/"/g, '""') + '"';
+                csvRows.push(`${currentId++},${escapedCategory},${escapedGroupValue}`);
+            }
+
+            const csvContent = '\uFEFF' + csvRows.join('\n');
+            return new Response(csvContent, {
+                headers: {
+                    'Content-Type': 'text/csv; charset=utf-8',
+                    'Content-Disposition': 'attachment; filename="gfwlist_new.csv"'
+                }
+            });
+        } catch (error) {
+            console.error('新版CSV生成错误:', error);
+            return new Response(`Error generating new CSV: ${error.message}`, { status: 500 });
         }
     },
     async serveRawGfwlistContent() {
