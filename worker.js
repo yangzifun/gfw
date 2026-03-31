@@ -178,7 +178,7 @@ export default {
                 <textarea id="raw-gfwlist-content" readonly rows="10" placeholder="正在加载原始 GFWList 内容..." style="min-height: 200px;"></textarea>
             </div>
             <footer class="footer">
-                <p>Powered by YZFN | <a href="https://www.yangzihome.space/security.html" target="_blank" rel="noopener noreferrer">安全声明</a></p>
+                <p>Powered by <a href="https://www.yangzifun.org/" target="_blank" rel="noopener noreferrer">YZFN</a> | <a href="https://www.yangzifun.org/security" target="_blank" rel="noopener noreferrer">安全声明</a></p>
             </footer>
         `;
 
