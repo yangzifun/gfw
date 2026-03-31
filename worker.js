@@ -505,12 +505,32 @@ export default {
             const categorizedDomains = await this.getCleanGfwDomains(true);
 
             const csvRows = ['id,group_name,group_value'];
+            const groupNameCounter = {};
             for (const { category, domains } of categorizedDomains) {
                 if (!domains || domains.length === 0) continue;
+
+                // sanitize group_name: no 空格、特殊字符，保留字母/数字/中文，下划线分隔
+                const rawGroupName = (category || 'group').trim();
+                let safeGroupName = rawGroupName
+                    .replace(/[\s]+/g, '_')
+                    .replace(/[^[\p{L}\p{N}_]]+/gu, '_')
+                    .replace(/_+/g, '_')
+                    .replace(/^_+|_+$/g, '');
+                if (!safeGroupName) safeGroupName = 'group';
+
+                // 唯一组名后缀，避免同名导致覆盖/冲突。
+                const normalized = safeGroupName.toLowerCase();
+                if (!groupNameCounter[normalized]) {
+                    groupNameCounter[normalized] = 1;
+                } else {
+                    groupNameCounter[normalized] += 1;
+                }
+                const finalGroupName = groupNameCounter[normalized] === 1 ? safeGroupName : `${safeGroupName}_${groupNameCounter[normalized]}`;
+
                 const groupValue = domains.map(domain => ({ domain, comment: '' }));
                 const groupValueJson = JSON.stringify(groupValue);
                 const escapedGroupValue = '"' + groupValueJson.replace(/"/g, '""') + '"';
-                const escapedCategory = '"' + category.replace(/"/g, '""') + '"';
+                const escapedCategory = '"' + finalGroupName.replace(/"/g, '""') + '"';
                 csvRows.push(`${currentId++},${escapedCategory},${escapedGroupValue}`);
             }
 
