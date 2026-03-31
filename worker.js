@@ -513,7 +513,7 @@ export default {
                 const rawGroupName = (category || 'group').trim();
                 let safeGroupName = rawGroupName
                     .replace(/[\s]+/g, '_')
-                    .replace(/[^[\p{L}\p{N}_]]+/gu, '_')
+                    .replace(/[^\p{L}\p{N}_]+/gu, '_')
                     .replace(/_+/g, '_')
                     .replace(/^_+|_+$/g, '');
                 if (!safeGroupName) safeGroupName = 'group';
