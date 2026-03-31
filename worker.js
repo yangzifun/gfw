@@ -437,32 +437,61 @@ export default {
                 if (domainMatch) candidate = domainMatch[0]; else continue;
             }
             if (candidate.startsWith('*.')) candidate = candidate.substring(2);
+
+            // 处理通配符：移除所有 '*'，并清理潜在的重复分隔符和前后非标准字符，避免生成无效域名
+            if (candidate.includes('*')) {
+                candidate = candidate.replace(/\*/g, '');
+                candidate = candidate.replace(/-\./g, '.').replace(/\.-/g, '.');
+                candidate = candidate.replace(/\.\.+/g, '.');
+                candidate = candidate.replace(/^[\.-]+|[\.-]+$/g, '');
+            }
+
             if (candidate && candidate.includes('.') && !ipAddressRegex.test(candidate)) domainSet.add(candidate.toLowerCase());
         }
         const uniqueDomains = Array.from(domainSet).sort();
         if (!groupByCategory) return [{ category: "通用", domains: uniqueDomains }];
 
-        const categorizedResult = {};
-        const uncategorizedDomains =[];
+        // 保持 DOMAIN_CATEGORY_MAP 中的原始顺序输出，通用服务放在最后
+        const categorizedResult = this.DOMAIN_CATEGORY_MAP.reduce((acc, categoryDef) => {
+            acc[categoryDef.name] = [];
+            return acc;
+        }, {});
+        categorizedResult["通用服务"] = [];
+
         for (const domain of uniqueDomains) {
             let foundCategory = false;
             for (const categoryDef of this.DOMAIN_CATEGORY_MAP) {
                 if (categoryDef.keywords.some(keyword => domain === keyword || domain.endsWith('.' + keyword) || domain.includes(keyword + '.'))) {
-                    if (!categorizedResult[categoryDef.name]) categorizedResult[categoryDef.name] = [];
                     categorizedResult[categoryDef.name].push(domain);
                     foundCategory = true;
                     break;
                 }
             }
-            if (!foundCategory) uncategorizedDomains.push(domain);
+            if (!foundCategory) {
+                categorizedResult["通用服务"].push(domain);
+            }
         }
-        if (uncategorizedDomains.length > 0) {
-            categorizedResult["通用服务"] = [...(categorizedResult["通用服务"] ||[]), ...uncategorizedDomains];
+
+        // 仅返回有域名的分组，且保持顺序
+        const result = [];
+        for (const categoryDef of this.DOMAIN_CATEGORY_MAP) {
+            const domains = categorizedResult[categoryDef.name];
+            if (domains && domains.length > 0) {
+                result.push({ category: categoryDef.name, domains: domains.sort() });
+            }
         }
-        return Object.keys(categorizedResult).sort().map(categoryName => ({
-            category: categoryName,
-            domains: categorizedResult[categoryName].sort()
-        }));
+        if (categorizedResult["通用服务"].length > 0) {
+            result.push({ category: "通用服务", domains: categorizedResult["通用服务"].sort() });
+        }
+        return result;
+    },
+    escapeCsvField(value) {
+        if (value === null || value === undefined) return '';
+        const text = String(value);
+        if (/["\r\n,]/.test(text)) {
+            return '"' + text.replace(/"/g, '""') + '"';
+        }
+        return text;
     },
     async serveIkuaiCsv(request) {
         try {
@@ -479,9 +508,15 @@ export default {
                     const chunk = domains.slice(i, i + DOMAINS_PER_CSV_ROW);
                     const domainCell = chunk.join(',');
                     const comment = `${category} (${Math.floor(i / DOMAINS_PER_CSV_ROW) + 1})`;
-                    const row =[
-                        currentId++, 'yes', `"${comment}"`, `"${domainCell}"`,
-                        interfacePort, `"${sourceAddress}"`, '1234567', '00:00-23:59'
+                    const row = [
+                        currentId++,
+                        'yes',
+                        this.escapeCsvField(comment),
+                        this.escapeCsvField(domainCell),
+                        this.escapeCsvField(interfacePort),
+                        this.escapeCsvField(sourceAddress),
+                        '1234567',
+                        '00:00-23:59'
                     ];
                     csvRows.push(row.join(','));
                 }
@@ -529,9 +564,7 @@ export default {
 
                 const groupValue = domains.map(domain => ({ domain, comment: '' }));
                 const groupValueJson = JSON.stringify(groupValue);
-                const escapedGroupValue = '"' + groupValueJson.replace(/"/g, '""') + '"';
-                const escapedCategory = '"' + finalGroupName.replace(/"/g, '""') + '"';
-                csvRows.push(`${currentId++},${escapedCategory},${escapedGroupValue}`);
+                csvRows.push(`${currentId++},${this.escapeCsvField(finalGroupName)},${this.escapeCsvField(groupValueJson)}`);
             }
 
             const csvContent = '\uFEFF' + csvRows.join('\n');
